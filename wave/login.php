@@ -5,14 +5,14 @@
  * ═══════════════════════════════════════════════════════════════
  * 
  * Funcionalidades:
- * ✅ Login de usuários normais → index.php
- * ✅ Login de admins → admin_dashboard.php
- * ✅ Prepared statements (seguro)
- * ✅ Verificação de sessão existente
+ * Login de usuários normais → index.php
+ * Login de admins → Dashboard.php
+ * Prepared statements (seguro)
+ * Verificação de sessão existente
  */
 
 session_start();
-require_once 'conexão.php';
+require_once 'conexao.php';
 
 // Se já está logado, redireciona para página correta
 if (isset($_SESSION['usuario_id'])) {
@@ -34,7 +34,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     if (empty($email) || empty($senha)) {
         $erro = 'Preencha todos os campos.';
     } else {
-        // 🔐 Usar prepared statement (seguro contra SQL injection)
+        // Usar prepared statement (seguro contra SQL injection)
         $stmt = $conn->prepare("SELECT id, nome, email, senha, nivel FROM usuarios WHERE email = ? LIMIT 1");
         
         if ($stmt === false) {
@@ -48,18 +48,18 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
             if ($result->num_rows > 0) {
                 $usuario = $result->fetch_assoc();
                 
-                // ✅ Verifica a senha com hash
+                // Verifica a senha com hash
                 if (password_verify($senha, $usuario['senha'])) {
-                    // ✅ LOGIN BEM-SUCEDIDO - Salvar sessão
+                    // LOGIN BEM-SUCEDIDO - Salvar sessão
                     $_SESSION['usuario_id'] = $usuario['id'];
-                    $_SESSION['nivel']      = $usuario['nivel'];
-                    $_SESSION['nome']       = $usuario['nome'];
-                    $_SESSION['email']      = $usuario['email'];
+                    $_SESSION['nivel'] = $usuario['nivel'];
+                    $_SESSION['nome'] = $usuario['nome'];
+                    $_SESSION['email'] = $usuario['email'];
                     
                     // Log de login
-                    error_log("✅ Login bem-sucedido: {$usuario['email']} ({$usuario['nivel']})");
+                    error_log("Login bem-sucedido: {$usuario['email']} ({$usuario['nivel']})");
                     
-                    // 🎯 REDIRECIONAR BASEADO NO NÍVEL
+                    // REDIRECIONAR BASEADO NO NÍVEL
                     if ($usuario['nivel'] === 'admin') {
                         // Admin vai para dashboard
                         header("Location: Dashboard.php");
@@ -69,14 +69,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                     }
                     exit();
                 } else {
-                    // ❌ Senha incorreta
+                    // Senha incorreta
                     $erro = 'E-mail ou senha incorretos.';
-                    error_log("❌ Senha incorreta: {$email}");
+                    error_log("Senha incorreta: {$email}");
                 }
             } else {
-                // ❌ Usuário não encontrado
+                // Usuário não encontrado
                 $erro = 'E-mail ou senha incorretos.';
-                error_log("❌ Usuário não encontrado: {$email}");
+                error_log("Usuário não encontrado: {$email}");
             }
             
             $stmt->close();
@@ -96,12 +96,12 @@ if (!$erro && isset($_GET['erro']) && $_GET['erro'] === 'invalido') {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Login — Usewaves</title>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,800;1,700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="login.css"/>
   <style>
     /* ── TABS ── */
     .role-tabs{display:flex;background:#e2e8f0;border-radius:.6rem;padding:.2rem;gap:.18rem;margin-bottom:1.4rem}
-    .role-tab{flex:1;text-align:center;padding:.44rem .4rem;border-radius:.44rem;font-size:.76rem;font-weight:600;cursor:pointer;border:none;background:none;color:#94a3b8;font-family:'DM Sans',sans-serif;transition:all .18s}
+    .role-tab{flex:1;text-align:center;padding:.44rem .4rem;border-radius:.44rem;font-size:.76rem;font-weight:600;cursor:pointer;border:none;background:none;color:#94a3b8;font-family:'Manrope',system-ui,sans-serif;transition:all .18s}
     .role-tab.on{background:#fff;color:#1e293b;box-shadow:0 1px 4px rgba(0,0,0,.1)}
     /* ── ADMIN BADGE ── */
     .adm-badge{display:none;align-items:center;gap:.4rem;background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:.5rem;padding:.32rem .7rem;font-size:.72rem;font-weight:600;margin-bottom:1rem}
@@ -127,15 +127,13 @@ if (!$erro && isset($_GET['erro']) && $_GET['erro'] === 'invalido') {
 
   <div class="lg-left">
     <div class="lg-brand">
-      <img src="logo.PNG" alt="Wave"/>
-      <div class="lg-brand-t">Usewaves</div>
     </div>
     <h1 class="lg-h1">No ritmo do mar,<br><em>para um melhor verão.</em></h1>
     <p class="lg-sub">Bijuterias leves e cheias de charme para destacar sua beleza em qualquer dia de sol.</p>
     <div class="lg-stats">
-      <div class="lg-stat"><span class="ls-ic">📈</span><div><div class="ls-t">+1000 clientes satisfeitos</div><div class="ls-s">Comunidade crescendo todo dia</div></div></div>
-      <div class="lg-stat"><span class="ls-ic">📦</span><div><div class="ls-t">Frete grátis a partir de R$99,90</div><div class="ls-s">Entrega para todo o Brasil</div></div></div>
-      <div class="lg-stat"><span class="ls-ic">✅</span><div><div class="ls-t">Parcelamento em até 12x</div><div class="ls-s">Cartão, PIX e boleto aceitos</div></div></div>
+      <div class="lg-stat"><span class="ls-ic"></span><div><div class="ls-t">+1000 clientes satisfeitos</div><div class="ls-s">Comunidade crescendo todo dia</div></div></div>
+      <div class="lg-stat"><span class="ls-ic"></span><div><div class="ls-t">Frete grátis a partir de R$99,90</div><div class="ls-s">Entrega para todo o Brasil</div></div></div>
+      <div class="lg-stat"><span class="ls-ic"></span><div><div class="ls-t">Parcelamento em até 12x</div><div class="ls-s">Cartão, PIX e boleto aceitos</div></div></div>
     </div>
   </div>
 
@@ -145,14 +143,14 @@ if (!$erro && isset($_GET['erro']) && $_GET['erro'] === 'invalido') {
 
     <!-- TABS -->
     <div class="role-tabs">
-      <button class="role-tab on" id="tabUser" onclick="setRole('usuario')">👤 Sou cliente</button>
-      <button class="role-tab" id="tabAdmin" onclick="setRole('admin')">⚙️ Admin</button>
+      <button class="role-tab on" id="tabUser" onclick="setRole('usuario')"> Sou cliente</button>
+      <button class="role-tab" id="tabAdmin" onclick="setRole('admin')"> Admin</button>
     </div>
-    <div class="adm-badge" id="admBadge">⚠️ Área restrita — somente administradores</div>
+    <div class="adm-badge" id="admBadge"> Área restrita — somente administradores</div>
 
     <!-- Erro PHP -->
     <?php if ($erro): ?>
-      <div class="f-error">❌ <?= htmlspecialchars($erro) ?></div>
+      <div class="f-error"> <?= htmlspecialchars($erro) ?></div>
     <?php endif; ?>
     <div class="f-error" id="jsErr" style="display:none"></div>
 
@@ -161,7 +159,7 @@ if (!$erro && isset($_GET['erro']) && $_GET['erro'] === 'invalido') {
       <div class="f-grp">
         <label class="f-lbl">E-mail</label>
         <div class="f-wrap">
-          <span class="f-ic">📧</span>
+          <span class="f-ic"></span>
           <input class="f-input" type="email" name="email" id="lEmail"
             placeholder="Digite seu E-mail"
             value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
@@ -171,11 +169,11 @@ if (!$erro && isset($_GET['erro']) && $_GET['erro'] === 'invalido') {
       <div class="f-grp">
         <label class="f-lbl">Senha</label>
         <div class="f-wrap">
-          <span class="f-ic">🔒</span>
+          <span class="f-ic"></span>
           <input class="f-input" type="password" name="senha" id="lPass"
             placeholder="Digite sua senha"
             autocomplete="current-password" required/>
-          <button type="button" class="f-eye" onclick="togglePass()">👁</button>
+          <button type="button" class="f-eye" id="fEye" onclick="togglePass()" title="Mostrar senha"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
       </div>
       <div class="f-row">
@@ -206,7 +204,13 @@ if (!$erro && isset($_GET['erro']) && $_GET['erro'] === 'invalido') {
   
   function togglePass() {
     const i = document.getElementById('lPass');
-    i.type = i.type === 'password' ? 'text' : 'password';
+    const btn = document.getElementById('fEye');
+    const showing = i.type === 'password';
+    i.type = showing ? 'text' : 'password';
+    btn.title = showing ? 'Ocultar senha' : 'Mostrar senha';
+    btn.innerHTML = showing
+      ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a20.4 20.4 0 0 1 4.22-5.22M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a20.3 20.3 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+      : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
   }
   
   function beforeSubmit() {
@@ -215,7 +219,7 @@ if (!$erro && isset($_GET['erro']) && $_GET['erro'] === 'invalido') {
     const err = document.getElementById('jsErr');
     
     if (!email || !senha) {
-      err.textContent = '❌ Preencha todos os campos.';
+      err.textContent = 'Preencha todos os campos.';
       err.style.display = 'flex';
       return false;
     }

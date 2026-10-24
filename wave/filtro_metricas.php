@@ -1,8 +1,8 @@
 <?php
 session_start();
-require_once 'conexão.php';
+require_once 'conexao.php';
 
-// 🔐 Apenas admin
+// Apenas admin
 if (!isset($_SESSION['nivel']) || $_SESSION['nivel'] !== 'admin') {
     echo json_encode(['erro' => 'Não autorizado']);
     exit();

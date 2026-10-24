@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once 'conexão.php';
+require_once 'conexao.php';
 header('Content-Type: application/json');
 
 $logado   = isset($_SESSION['usuario_id']);
@@ -16,7 +16,6 @@ function json_err($msg)    { echo json_encode(['sucesso'=>false,'erro'=>$msg]); 
 
 // ── Garantir estrutura da tabela ──
 $conn->query("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS imagem VARCHAR(255) DEFAULT NULL");
-$conn->query("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS destaque TINYINT(1) DEFAULT 0");
 $conn->query("CREATE TABLE IF NOT EXISTS avaliacoes (
   id INT AUTO_INCREMENT PRIMARY KEY,
   produto_id INT NOT NULL,
@@ -38,7 +37,6 @@ switch ($acao) {
     $descricao = trim($conn->real_escape_string($_POST['descricao'] ?? ''));
     $preco     = floatval($_POST['preco'] ?? 0);
     $estoque   = max(0,(int)($_POST['estoque'] ?? 0));
-    $destaque  = isset($_POST['destaque']) ? 1 : 0;
     if (!$nome || !$categoria || $preco <= 0) json_err('Campos obrigatórios faltando.');
 
     // Upload de imagem
@@ -54,22 +52,14 @@ switch ($acao) {
       if(!move_uploaded_file($_FILES['imagem']['tmp_name'],$dir.$imagem_nome)) json_err('Falha ao salvar imagem.');
     }
     $img_sql = $imagem_nome ? "'".$conn->real_escape_string($imagem_nome)."'" : "NULL";
-    $conn->query("INSERT INTO produtos (nome,categoria,descricao,preco,estoque,ativo,destaque,imagem) VALUES ('$nome','$categoria','$descricao',$preco,$estoque,1,$destaque,$img_sql)");
+    $conn->query("INSERT INTO produtos (nome,categoria,descricao,preco,estoque,ativo,imagem) VALUES ('$nome','$categoria','$descricao',$preco,$estoque,1,$img_sql)");
     json_ok(['id'=>$conn->insert_id]);
 
-  // ── Toggle destaque (admin) ──
-  case 'toggle_destaque':
-    if (!$eh_admin) json_err('Acesso negado.');
-    $id = (int)($_POST['id'] ?? 0);
-    if (!$id) json_err('ID inválido.');
-    $r = $conn->query("SELECT destaque FROM produtos WHERE id=$id LIMIT 1");
-    if (!$r || $r->num_rows===0) json_err('Produto não encontrado.');
-    $atual = (int)$r->fetch_assoc()['destaque'];
-    $novo  = $atual ? 0 : 1;
-    $conn->query("UPDATE produtos SET destaque=$novo WHERE id=$id");
-    json_ok(['destaque'=>$novo]);
-
   // ── Desativar produto (admin) ──
+  // Isso NÃO apaga o produto do banco — só marca ativo=0 pra ele sumir da
+  // loja. O registro continua existindo (é assim que o histórico de vendas
+  // e o cálculo de "mais vendidos" continuam corretos). Pra apagar de
+  // verdade, veja a ação 'excluir_produto' logo abaixo.
   case 'desativar':
     if (!$eh_admin) json_err('Acesso negado.');
     $id = (int)($_POST['id'] ?? 0);
@@ -77,14 +67,47 @@ switch ($acao) {
     $conn->query("UPDATE produtos SET ativo=0 WHERE id=$id");
     json_ok();
 
+  // ── Excluir produto PERMANENTEMENTE (admin) ──
+  // Diferente de 'desativar': isso apaga a linha da tabela `produtos` de
+  // vez (DELETE, não UPDATE). Não dá pra desfazer.
+  // Proteção: se o produto já apareceu em alguma venda registrada
+  // (vendas_itens), a exclusão é bloqueada — apagar quebraria o histórico
+  // de vendas e o cálculo de "mais vendidos". Nesse caso, use 'desativar'.
+  case 'excluir_produto':
+    if (!$eh_admin) json_err('Acesso negado.');
+    $id = (int)($_POST['id'] ?? 0);
+    if (!$id) json_err('ID inválido.');
+
+    $r = $conn->query("SELECT imagem FROM produtos WHERE id=$id LIMIT 1");
+    if (!$r || $r->num_rows === 0) json_err('Produto não encontrado (talvez já tenha sido excluído).');
+    $prod = $r->fetch_assoc();
+
+    $vc = $conn->query("SELECT COUNT(*) as c FROM vendas_itens WHERE produto_id=$id");
+    $qtd_vendas = $vc ? (int)$vc->fetch_assoc()['c'] : 0;
+    if ($qtd_vendas > 0) {
+      json_err('Este produto já tem '.$qtd_vendas.' item(ns) em vendas registradas. Excluir de vez apagaria esse histórico — desative o produto em vez disso (ele some da loja, mas o histórico continua correto).');
+    }
+
+    $conn->query("DELETE FROM avaliacoes WHERE produto_id=$id");
+    $ok = $conn->query("DELETE FROM produtos WHERE id=$id");
+    if (!$ok) json_err('Falha ao excluir no banco de dados.');
+
+    // Apaga o arquivo de imagem do servidor também, se existir.
+    if (!empty($prod['imagem'])) {
+      $caminho = 'uploads/produtos/'.$prod['imagem'];
+      if (is_file($caminho)) @unlink($caminho);
+    }
+
+    json_ok();
+
   // ── Listar produtos ──
   case 'listar':
     $cat  = trim($conn->real_escape_string($_GET['categoria'] ?? ''));
     $q    = trim($conn->real_escape_string($_GET['q'] ?? ''));
-    $sql  = "SELECT id,nome,descricao,preco,categoria,estoque,imagem,destaque FROM produtos WHERE ativo=1";
+    $sql  = "SELECT id,nome,descricao,preco,categoria,estoque,imagem FROM produtos WHERE ativo=1";
     if ($cat)  $sql .= " AND categoria='$cat'";
     if ($q)    $sql .= " AND (nome LIKE '%$q%' OR categoria LIKE '%$q%')";
-    $sql .= " ORDER BY destaque DESC, id DESC";
+    $sql .= " ORDER BY id DESC";
     $res  = $conn->query($sql);
     $list = [];
     if ($res) while($row=$res->fetch_assoc()) $list[]=$row;

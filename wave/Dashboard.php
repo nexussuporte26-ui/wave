@@ -1,8 +1,8 @@
 <?php
 session_start();
-require_once 'conexão.php';
+require_once 'conexao.php';
 
-// 🔐 VERIFICAÇÃO DE AUTENTICAÇÃO
+// VERIFICAÇÃO DE AUTENTICAÇÃO
 $logado = isset($_SESSION['usuario_id']) && isset($_SESSION['nivel']);
 $eh_admin = $logado && $_SESSION['nivel'] === 'admin';
 
@@ -12,77 +12,30 @@ if (!$eh_admin) {
     exit();
 }
 
+// Token CSRF usado pela aba Clientes (api_usuarios.php)
+if (empty($_SESSION['csrf_usuarios'])) { $_SESSION['csrf_usuarios'] = bin2hex(random_bytes(32)); }
+$csrf_usuarios = $_SESSION['csrf_usuarios'];
+
 // Dados do admin logado
 $nome_admin = htmlspecialchars($_SESSION['nome'] ?? 'Admin');
 $email_admin = htmlspecialchars($_SESSION['email'] ?? 'admin@wave.com.br');
 $id_admin = $_SESSION['usuario_id'];
 
-// 🚪 LOGOUT
+// LOGOUT
 if (isset($_GET['sair'])) {
     session_destroy();
     header("Location: index.php");
     exit();
 }
 
-// 📝 PROCESSAR FORMULÁRIO DE CADASTRO DE PRODUTO
-$msg_produto = '';
-$tipo_msg_produto = '';
+// CADASTRO/EDIÇÃO DE PRODUTO
+// Unificado em cadastro_produto.php (upload de imagem real, edição).
+// O Dashboard só lista e linka para lá — evita ter dois formulários de
+// produto divergentes gravando em colunas diferentes.
+// (ação rápida de desativar direto na tabela é feita via
+// api_produtos.php, chamada pelo JS mais abaixo)
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao_produto'])) {
-    $nome = trim($_POST['nome'] ?? '');
-    $categoria = trim($_POST['categoria'] ?? '');
-    $descricao = trim($_POST['descricao'] ?? '');
-    $preco = floatval($_POST['preco'] ?? 0);
-    $preco_promo = $_POST['preco_promo'] ? floatval($_POST['preco_promo']) : null;
-    $estoque = intval($_POST['estoque'] ?? 0);
-    $estoque_min = intval($_POST['estoque_min'] ?? 5);
-    $imagem_url = trim($_POST['imagem_url'] ?? '');
-    $sku = trim($_POST['sku'] ?? '');
-    $destaque = isset($_POST['destaque']) ? 1 : 0;
-    $ativo = isset($_POST['ativo']) ? 1 : 0;
-
-    // Validações
-    if (!$nome || !$categoria || $preco <= 0) {
-        $msg_produto = '❌ Preencha todos os campos obrigatórios corretamente!';
-        $tipo_msg_produto = 'erro';
-    } elseif ($preco_promo && $preco_promo >= $preco) {
-        $msg_produto = '❌ O preço promocional deve ser menor que o preço original!';
-        $tipo_msg_produto = 'erro';
-    } else {
-        // Inserir no banco
-        $stmt = $conn->prepare("
-            INSERT INTO produtos 
-            (nome, imagem_url, descricao, preco, preco_promo, estoque, estoque_min, categoria, sku, destaque, ativo, criado_em) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-        ");
-
-        $stmt->bind_param(
-            "sssddiiisis",
-            $nome,
-            $imagem_url,
-            $descricao,
-            $preco,
-            $preco_promo,
-            $estoque,
-            $estoque_min,
-            $categoria,
-            $sku,
-            $destaque,
-            $ativo
-        );
-
-        if ($stmt->execute()) {
-            $msg_produto = '✅ Produto cadastrado com sucesso!';
-            $tipo_msg_produto = 'sucesso';
-            $_POST = [];
-        } else {
-            $msg_produto = '❌ Erro ao cadastrar: ' . $conn->error;
-            $tipo_msg_produto = 'erro';
-        }
-    }
-}
-
-// 📊 BUSCAR DADOS DO BANCO PARA MÉTRICAS
+// BUSCAR DADOS DO BANCO PARA MÉTRICAS
 $metricas = [
     'total_produtos' => 0,
     'produtos_ativos' => 0,
@@ -118,7 +71,7 @@ if ($resultado) {
 
 // LISTAR PRODUTOS RECENTES
 $produtos = [];
-$resultado = $conn->query("SELECT id, nome, preco, estoque, categoria, ativo, destaque FROM produtos ORDER BY criado_em DESC LIMIT 50");
+$resultado = $conn->query("SELECT id, nome, preco, estoque, categoria, ativo FROM produtos ORDER BY criado_em DESC LIMIT 50");
 if ($resultado) {
     while ($row = $resultado->fetch_assoc()) {
         $produtos[] = $row;
@@ -176,7 +129,7 @@ if ($stats_vendas['total_vendas'] > 0) {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Wave Admin Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&display=swap" rel="stylesheet" />
   <style>
     :root {
       --blue:#0A5489;
@@ -188,8 +141,8 @@ if ($stats_vendas['total_vendas'] > 0) {
       --red:#dc2626;
       --yellow:#d97706;
       --gold:#C8963E;
-      --font-display:'Cormorant Garamond',Georgia,serif;
-      --font-body:'DM Sans',sans-serif;
+      --font-display:'Manrope',system-ui,sans-serif;
+      --font-body:'Manrope',system-ui,sans-serif;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: var(--font-body); background: #f8f9fa; color: var(--text); }
@@ -396,6 +349,33 @@ if ($stats_vendas['total_vendas'] > 0) {
     }
     .empty-icon { font-size: 2.5rem; margin-bottom: 1rem; }
     
+    /* ── CLIENTES: gerenciamento de usuários ── */
+    .u-bar { display: flex; gap: .8rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .u-bar input { flex: 1; min-width: 220px; }
+    .u-bar select { width: auto; min-width: 160px; }
+    .u-inp { width: 100%; padding: .75rem 1rem; border: 1px solid #e5e7eb; border-radius: .4rem; font-family: var(--font-body); font-size: .9rem; color: var(--text); background: #fff; }
+    .u-inp:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(10,84,137,0.1); }
+    .u-inp:disabled { background: #f3f4f6; color: var(--muted); }
+    .badge-purple { background: #ede9fe; color: #6d28d9; }
+    .u-btn-sm { padding: .4rem .9rem; font-size: .8rem; }
+    .u-pager { display: flex; align-items: center; justify-content: center; gap: 1rem; padding-top: 1.2rem; font-size: .85rem; color: var(--muted); }
+    .u-info { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem 1rem; background: #f8f9fa; border-radius: .4rem; padding: .8rem 1rem; margin-bottom: 1.2rem; font-size: .85rem; }
+    .u-info small { display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+    .u-msg { border-radius: .4rem; padding: .7rem 1rem; font-size: .85rem; font-weight: 500; margin-bottom: 1rem; line-height: 1.5; }
+    .u-msg.ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #16a34a; }
+    .u-msg.er { background: #fef2f2; border: 1px solid #fca5a5; color: #dc2626; }
+    .u-sec { border-top: 1px solid #e5e7eb; margin-top: 1.5rem; padding-top: 1.2rem; }
+    .u-sec h3 { font-size: 1rem; color: var(--text); margin-bottom: .3rem; }
+    .u-hint { font-size: .78rem; color: var(--muted); line-height: 1.5; margin-bottom: .8rem; }
+    .u-row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+    .u-row .u-inp { flex: 1; min-width: 160px; }
+    .u-novasenha { background: #fffbeb; border: 1px solid #fde68a; border-radius: .4rem; padding: .8rem 1rem; margin-top: .8rem; font-size: .85rem; color: #92400e; }
+    .u-novasenha code { background: #fff; padding: .2rem .5rem; border-radius: .3rem; font-size: .95rem; font-weight: 700; letter-spacing: .04em; color: var(--text); user-select: all; }
+    .u-log-item { padding: .5rem 0; border-bottom: 1px solid #f0f0f0; font-size: .8rem; line-height: 1.5; }
+    .u-log-item:last-child { border-bottom: none; }
+    .u-log-item em { font-style: normal; color: var(--muted); }
+    @media (max-width: 600px) { .u-info { grid-template-columns: 1fr; } }
+
     /* PAGES */
     .page { display: none; }
     .page.active { display: block; }
@@ -540,6 +520,14 @@ if ($stats_vendas['total_vendas'] > 0) {
       .header { flex-direction: column; align-items: flex-start; }
       .form-row { grid-template-columns: 1fr; }
     }
+    @media(max-width: 480px) {
+      .header-logo img { height: 44px; }
+      .header-info h1 { font-size: 1.5rem; }
+      .header-right { margin-left: 0; }
+      .metric { padding: 1.1rem; }
+      .metric-value { font-size: 1.5rem; }
+      .card-header, .card-body { padding: 1.1rem; }
+    }
   </style>
 </head>
 <body>
@@ -549,36 +537,38 @@ if ($stats_vendas['total_vendas'] > 0) {
   <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <span></span>
-      
+      <span></span> Wave Admin
     </div>
     
     <!-- HOME BUTTON DESTACADO -->
     <a href="index.php" style="display: block; padding: 1rem; background: linear-gradient(135deg, var(--green) 0%, #0d9488 100%); color: white; border-radius: 0.6rem; text-align: center; font-weight: 700; font-size: 0.95rem; margin-bottom: 1.5rem; text-decoration: none; transition: all .3s; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(22, 163, 74, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(22, 163, 74, 0.3)'">
-      🏠 Voltar à Home
+       Voltar à Home
     </a>
     
     <nav class="sidebar-menu">
       <div class="menu-item active" onclick="showPage('dashboard', this)">
-        <span>📊</span> Dashboard
+        <span></span> Dashboard
       </div>
       <div class="menu-item" onclick="showPage('vendas', this)">
-        <span>🛍️</span> Vendas
+        <span></span> Vendas
       </div>
       <div class="menu-item" onclick="showPage('produtos', this)">
-        <span>📦</span> Produtos
+        <span></span> Produtos
       </div>
       <div class="menu-item" onclick="showPage('clientes', this)">
-        <span>👥</span> Clientes
+        <span></span> Clientes
       </div>
       <div class="menu-item" onclick="showPage('estoque', this)">
-        <span>📋</span> Estoque
+        <span></span> Estoque
       </div>
-      <a href="javascript:void(0)" class="menu-item" onclick="showPage('cadastro-produto', this)">
-        <span>➕</span> Novo Produto
+      <a href="cadastro_produto.php" class="menu-item">
+        <span></span> Novo Produto
+      </a>
+      <a href="categorias_admin.php" class="menu-item">
+        <span></span> Categorias
       </a>
       <div class="menu-item" onclick="showPage('config', this)">
-        <span>⚙️</span> Configurações
+        <span></span> Configurações
       </div>
     </nav>
     
@@ -587,7 +577,7 @@ if ($stats_vendas['total_vendas'] > 0) {
         <div style="font-weight: 600; font-size: 0.85rem;"><?= $nome_admin ?></div>
         <div style="font-size: 0.75rem; color: var(--muted);">Admin</div>
       </div>
-      <a href="admin_dashboard.php?sair=1" style="padding: 0.6rem 1rem; text-align: center; background: #fef2f2; color: var(--red); border-radius: 0.4rem; font-weight: 600; display: block;">🚪 Sair</a>
+      <a href="Dashboard.php?sair=1" style="padding: 0.6rem 1rem; text-align: center; background: #fef2f2; color: var(--red); border-radius: 0.4rem; font-weight: 600; display: block;"> Sair</a>
     </div>
   </aside>
 
@@ -605,7 +595,7 @@ if ($stats_vendas['total_vendas'] > 0) {
       </div>
       <div class="header-right">
         <button class="btn-filtros" onclick="abrirFiltros()">
-          🎚️ Filtros
+           Filtros
         </button>
       </div>
     </div>
@@ -670,7 +660,7 @@ if ($stats_vendas['total_vendas'] > 0) {
     <div id="page-vendas" class="page">
       <div class="card">
         <div class="card-header">
-          <h2>📊 Histórico de Vendas</h2>
+          <h2> Histórico de Vendas</h2>
         </div>
         <div class="card-body">
           <?php if (!empty($vendas)): ?>
@@ -709,7 +699,7 @@ if ($stats_vendas['total_vendas'] > 0) {
             </div>
           <?php else: ?>
             <div class="empty">
-              <div class="empty-icon">🛍️</div>
+              <div class="empty-icon"></div>
               <p>Nenhuma venda registrada</p>
             </div>
           <?php endif; ?>
@@ -721,8 +711,8 @@ if ($stats_vendas['total_vendas'] > 0) {
     <div id="page-produtos" class="page">
       <div class="card">
         <div class="card-header">
-          <h2>📦 Produtos</h2>
-          <button onclick="showPage('cadastro-produto')" style="padding: 0.6rem 1.2rem; background: var(--blue); color: white; border-radius: 0.5rem; font-weight: 600; border: none; cursor: pointer;">➕ Novo</button>
+          <h2> Produtos</h2>
+          <a href="cadastro_produto.php" style="padding: 0.6rem 1.2rem; background: var(--blue); color: white; border-radius: 0.5rem; font-weight: 600; display:inline-block;"> Novo</a>
         </div>
         <div class="card-body">
           <?php if (!empty($produtos)): ?>
@@ -735,19 +725,27 @@ if ($stats_vendas['total_vendas'] > 0) {
                     <th>Preço</th>
                     <th>Estoque</th>
                     <th>Status</th>
+                    <th>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   <?php foreach ($produtos as $prod): ?>
-                    <tr>
+                    <tr id="prod-row-<?= $prod['id'] ?>">
                       <td><strong><?= htmlspecialchars($prod['nome']) ?></strong></td>
                       <td><?= htmlspecialchars($prod['categoria']) ?></td>
                       <td>R$ <?= number_format($prod['preco'], 2, ',', '.') ?></td>
                       <td><?= $prod['estoque'] ?> un.</td>
                       <td>
                         <span class="badge <?= $prod['ativo'] ? 'badge-green' : 'badge-red' ?>">
-                          <?= $prod['ativo'] ? '✅ Ativo' : '❌ Inativo' ?>
+                          <?= $prod['ativo'] ? 'Ativo' : 'Inativo' ?>
                         </span>
+                      </td>
+                      <td style="white-space:nowrap">
+                        <a href="cadastro_produto.php?id=<?= $prod['id'] ?>" style="color:var(--blue);font-weight:600;font-size:.82rem;margin-right:.8rem"> Editar</a>
+                        <?php if ($prod['ativo']): ?>
+                        <button type="button" onclick="desativarProduto(<?= $prod['id'] ?>, this)" style="border:none;background:none;color:var(--red);font-weight:600;font-size:.82rem;cursor:pointer;margin-right:.8rem"> Desativar</button>
+                        <?php endif; ?>
+                        <button type="button" onclick="excluirProduto(<?= $prod['id'] ?>, this)" style="border:none;background:none;color:#991b1b;font-weight:700;font-size:.82rem;cursor:pointer"> Excluir de vez</button>
                       </td>
                     </tr>
                   <?php endforeach; ?>
@@ -756,8 +754,9 @@ if ($stats_vendas['total_vendas'] > 0) {
             </div>
           <?php else: ?>
             <div class="empty">
-              <div class="empty-icon">📦</div>
+              <div class="empty-icon"></div>
               <p>Nenhum produto cadastrado</p>
+              <a href="cadastro_produto.php" style="color:var(--blue);font-weight:600">Cadastrar o primeiro produto →</a>
             </div>
           <?php endif; ?>
         </div>
@@ -768,38 +767,35 @@ if ($stats_vendas['total_vendas'] > 0) {
     <div id="page-clientes" class="page">
       <div class="card">
         <div class="card-header">
-          <h2>👥 Clientes</h2>
+          <h2> Clientes</h2>
+          <span id="u-total" style="font-size:.85rem;color:var(--muted)"></span>
         </div>
         <div class="card-body">
-          <?php if (!empty($clientes)): ?>
-            <div style="overflow-x: auto;">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>E-mail</th>
-                    <th>Telefone</th>
-                    <th>Data Cadastro</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php foreach ($clientes as $cliente): ?>
-                    <tr>
-                      <td><strong><?= htmlspecialchars($cliente['nome']) ?></strong></td>
-                      <td><?= htmlspecialchars($cliente['email']) ?></td>
-                      <td><?= htmlspecialchars($cliente['telefone'] ?? '-') ?></td>
-                      <td><?= date('d/m/Y', strtotime($cliente['criado_em'])) ?></td>
-                    </tr>
-                  <?php endforeach; ?>
-                </tbody>
-              </table>
-            </div>
-          <?php else: ?>
-            <div class="empty">
-              <div class="empty-icon">👥</div>
-              <p>Nenhum cliente cadastrado</p>
-            </div>
-          <?php endif; ?>
+          <div class="u-bar">
+            <input type="text" class="u-inp" id="u-busca" placeholder="Buscar por nome, e-mail, telefone ou ID" oninput="buscarUsuarios()" autocomplete="off">
+            <select class="u-inp" id="u-filtro" onchange="carregarUsuarios(1)" style="width:auto">
+              <option value="">Todos</option>
+              <option value="usuario">Só clientes</option>
+              <option value="admin">Só administradores</option>
+            </select>
+          </div>
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>E-mail</th>
+                  <th>Telefone</th>
+                  <th>Nível</th>
+                  <th>Data Cadastro</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="u-tbody"></tbody>
+            </table>
+          </div>
+          <div id="u-vazio" class="empty" style="display:none"><p>Nenhum usuário encontrado</p></div>
+          <div id="u-pager" class="u-pager"></div>
         </div>
       </div>
     </div>
@@ -808,7 +804,7 @@ if ($stats_vendas['total_vendas'] > 0) {
     <div id="page-estoque" class="page">
       <div class="card">
         <div class="card-header">
-          <h2>📋 Estoque</h2>
+          <h2> Estoque</h2>
         </div>
         <div class="card-body">
           <?php if (!empty($produtos)): ?>
@@ -828,9 +824,9 @@ if ($stats_vendas['total_vendas'] > 0) {
                     $estoque = $prod['estoque'];
                     $minimo = 5;
                     $status = 'badge-green';
-                    $msg = '✅ OK';
-                    if ($estoque === 0) { $status = 'badge-red'; $msg = '❌ Esgotado'; }
-                    elseif ($estoque <= $minimo) { $status = 'badge-yellow'; $msg = '⚠️ Crítico'; }
+                    $msg = 'OK';
+                    if ($estoque === 0) { $status = 'badge-red'; $msg = 'Esgotado'; }
+                    elseif ($estoque <= $minimo) { $status = 'badge-yellow'; $msg = 'Crítico'; }
                   ?>
                     <tr>
                       <td><strong><?= htmlspecialchars($prod['nome']) ?></strong></td>
@@ -845,7 +841,7 @@ if ($stats_vendas['total_vendas'] > 0) {
             </div>
           <?php else: ?>
             <div class="empty">
-              <div class="empty-icon">📋</div>
+              <div class="empty-icon"></div>
               <p>Nenhum produto</p>
             </div>
           <?php endif; ?>
@@ -853,144 +849,12 @@ if ($stats_vendas['total_vendas'] > 0) {
       </div>
     </div>
 
-    <!-- PAGE: CADASTRO DE PRODUTO -->
-    <div id="page-cadastro-produto" class="page">
-      <div class="card">
-        <div class="card-header">
-          <h2>➕ Novo Produto</h2>
-        </div>
-        <div class="card-body">
-          
-          <?php if ($msg_produto): ?>
-            <div class="alert <?= $tipo_msg_produto ?>">
-              <?= $msg_produto ?>
-            </div>
-          <?php endif; ?>
-
-          <form method="POST">
-            <input type="hidden" name="acao_produto" value="1">
-            
-            <!-- INFORMAÇÕES BÁSICAS -->
-            <div style="margin-bottom: 2rem;">
-              <h3 style="font-size: 1.1rem; color: var(--blue); margin-bottom: 1rem;">📦 Informações Básicas</h3>
-              
-              <div class="form-group">
-                <label>Nome do Produto *</label>
-                <input type="text" name="nome" placeholder="Ex: Pulseira Ondas do Mar" required value="<?= htmlspecialchars($_POST['nome'] ?? '') ?>">
-              </div>
-
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Categoria *</label>
-                  <select name="categoria" required>
-                    <option value="">Selecione...</option>
-                    <option value="Colares" <?= ($_POST['categoria'] ?? '') === 'Colares' ? 'selected' : '' ?>>🐚 Colares</option>
-                    <option value="Pulseiras" <?= ($_POST['categoria'] ?? '') === 'Pulseiras' ? 'selected' : '' ?>>🌊 Pulseiras</option>
-                    <option value="Brincos" <?= ($_POST['categoria'] ?? '') === 'Brincos' ? 'selected' : '' ?>>🌺 Brincos</option>
-                    <option value="Anéis" <?= ($_POST['categoria'] ?? '') === 'Anéis' ? 'selected' : '' ?>>💍 Anéis</option>
-                    <option value="Kits" <?= ($_POST['categoria'] ?? '') === 'Kits' ? 'selected' : '' ?>>🎁 Kits Presente</option>
-                  </select>
-                </div>
-
-                <div class="form-group">
-                  <label>SKU (Código)</label>
-                  <input type="text" name="sku" placeholder="Ex: WAV-001" value="<?= htmlspecialchars($_POST['sku'] ?? '') ?>">
-                </div>
-              </div>
-
-              <div class="form-group">
-                <label>Descrição *</label>
-                <textarea name="descricao" placeholder="Descreva o produto..." required><?= htmlspecialchars($_POST['descricao'] ?? '') ?></textarea>
-              </div>
-            </div>
-
-            <!-- PREÇOS -->
-            <div style="margin-bottom: 2rem;">
-              <h3 style="font-size: 1.1rem; color: var(--blue); margin-bottom: 1rem;">💰 Preços</h3>
-              
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Preço Original (R$) *</label>
-                  <input type="number" name="preco" placeholder="99.90" step="0.01" min="0" required value="<?= htmlspecialchars($_POST['preco'] ?? '') ?>">
-                </div>
-
-                <div class="form-group">
-                  <label>Preço Promocional (R$)</label>
-                  <input type="number" name="preco_promo" placeholder="79.90" step="0.01" min="0" value="<?= htmlspecialchars($_POST['preco_promo'] ?? '') ?>" oninput="atualizarDesconto()">
-                </div>
-              </div>
-
-              <div class="price-info">
-                <div id="priceInfo">Digite os preços acima para ver o desconto</div>
-              </div>
-            </div>
-
-            <!-- IMAGEM -->
-            <div style="margin-bottom: 2rem;">
-              <h3 style="font-size: 1.1rem; color: var(--blue); margin-bottom: 1rem;">🖼️ Imagem</h3>
-              
-              <div class="form-group">
-                <label>URL da Imagem</label>
-                <input type="url" name="imagem_url" placeholder="https://..." value="<?= htmlspecialchars($_POST['imagem_url'] ?? '') ?>">
-              </div>
-
-              <?php if (!empty($_POST['imagem_url'])): ?>
-                <div class="price-info">
-                  <strong>Preview:</strong><br>
-                  <img src="<?= htmlspecialchars($_POST['imagem_url']) ?>" alt="Preview" style="max-width: 150px; margin-top: .5rem; border-radius: .4rem;">
-                </div>
-              <?php endif; ?>
-            </div>
-
-            <!-- ESTOQUE -->
-            <div style="margin-bottom: 2rem;">
-              <h3 style="font-size: 1.1rem; color: var(--blue); margin-bottom: 1rem;">📊 Estoque</h3>
-              
-              <div class="form-row">
-                <div class="form-group">
-                  <label>Quantidade *</label>
-                  <input type="number" name="estoque" placeholder="100" min="0" required value="<?= htmlspecialchars($_POST['estoque'] ?? '0') ?>">
-                </div>
-
-                <div class="form-group">
-                  <label>Estoque Mínimo</label>
-                  <input type="number" name="estoque_min" placeholder="5" min="0" value="<?= htmlspecialchars($_POST['estoque_min'] ?? '5') ?>">
-                </div>
-              </div>
-            </div>
-
-            <!-- CONFIGURAÇÕES -->
-            <div style="margin-bottom: 2rem;">
-              <h3 style="font-size: 1.1rem; color: var(--blue); margin-bottom: 1rem;">⚙️ Configurações</h3>
-              
-              <div class="checkbox-group">
-                <div class="checkbox-item">
-                  <input type="checkbox" id="destaque" name="destaque" <?= !empty($_POST['destaque']) ? 'checked' : '' ?>>
-                  <label for="destaque">⭐ Destacado na Home</label>
-                </div>
-
-                <div class="checkbox-item">
-                  <input type="checkbox" id="ativo" name="ativo" checked <?= !isset($_POST['ativo']) || !empty($_POST['ativo']) ? 'checked' : '' ?>>
-                  <label for="ativo">✅ Ativo</label>
-                </div>
-              </div>
-            </div>
-
-            <!-- BOTÕES -->
-            <div class="button-group">
-              <button type="submit" class="btn-primary">💾 Salvar Produto</button>
-              <button type="button" class="btn-secondary" onclick="showPage('dashboard')">Cancelar</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
 
     <!-- PAGE: CONFIG -->
     <div id="page-config" class="page">
       <div class="card">
         <div class="card-header">
-          <h2>⚙️ Configurações</h2>
+          <h2> Configurações</h2>
         </div>
         <div class="card-body">
           <div style="display: flex; flex-direction: column; gap: 1rem;">
@@ -1006,7 +870,7 @@ if ($stats_vendas['total_vendas'] > 0) {
               <span style="color: var(--muted);">ID</span>
               <strong><?= $id_admin ?></strong>
             </div>
-            <a href="admin_dashboard.php?sair=1" style="padding: 0.8rem 1.5rem; background: var(--red); color: white; border-radius: 0.5rem; text-align: center; font-weight: 600; margin-top: 1rem;">🚪 Sair da Conta</a>
+            <a href="Dashboard.php?sair=1" style="padding: 0.8rem 1.5rem; background: var(--red); color: white; border-radius: 0.5rem; text-align: center; font-weight: 600; margin-top: 1rem;"> Sair da Conta</a>
           </div>
         </div>
       </div>
@@ -1020,7 +884,7 @@ if ($stats_vendas['total_vendas'] > 0) {
 <div id="modal-filtros" class="modal">
   <div class="modal-content">
     <div class="modal-header">
-      <h2>🎚️ Filtros</h2>
+      <h2> Filtros</h2>
       <button class="modal-close" onclick="fecharFiltros()">✕</button>
     </div>
 
@@ -1037,16 +901,80 @@ if ($stats_vendas['total_vendas'] > 0) {
       <select id="status-venda" class="filter-select">
         <option value="">Todos</option>
         <option value="pendente">⏳ Pendente</option>
-        <option value="confirmada">📦 Confirmada</option>
-        <option value="enviada">🚚 Enviada</option>
-        <option value="entregue">✅ Entregue</option>
-        <option value="cancelada">❌ Cancelada</option>
+        <option value="confirmada"> Confirmada</option>
+        <option value="enviada"> Enviada</option>
+        <option value="entregue"> Entregue</option>
+        <option value="cancelada"> Cancelada</option>
       </select>
     </div>
 
     <div class="filter-buttons">
       <button class="btn-primary" onclick="aplicarFiltros()" style="flex: 1;">✓ Filtrar</button>
       <button class="btn-secondary" onclick="limparFiltros()">Limpar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-usuario" class="modal">
+  <div class="modal-content" style="max-width:580px">
+    <div class="modal-header">
+      <h2 id="u-titulo">Editar usuário</h2>
+      <button class="modal-close" onclick="fecharUsuario()">✕</button>
+    </div>
+    <div id="u-msg" class="u-msg" style="display:none"></div>
+    <div id="u-corpo">
+      <div class="u-info">
+        <div><small>ID</small><span id="u-id"></span></div>
+        <div><small>Cadastrado em</small><span id="u-criado"></span></div>
+      </div>
+      <form onsubmit="salvarUsuario(event)">
+        <div class="form-group">
+          <label>Nome</label>
+          <input type="text" class="u-inp" id="u-nome" maxlength="150" required>
+        </div>
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" class="u-inp" id="u-email" maxlength="190" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Telefone / WhatsApp</label>
+            <input type="text" class="u-inp" id="u-tel" maxlength="30" placeholder="(11) 99999-9999">
+          </div>
+          <div class="form-group">
+            <label>Nível de acesso</label>
+            <select class="u-inp" id="u-nivel">
+              <option value="usuario">Cliente</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+        </div>
+        <p class="u-hint" id="u-nivel-hint"></p>
+        <div class="button-group" style="margin-top:1rem">
+          <button type="submit" class="btn-primary" id="u-btn-salvar">Salvar alterações</button>
+          <button type="button" class="btn-secondary" onclick="fecharUsuario()">Fechar</button>
+        </div>
+      </form>
+
+      <div class="u-sec" id="u-senha-sec">
+        <h3>Redefinir senha</h3>
+        <p class="u-hint">A senha atual não pode ser exibida (ela é guardada criptografada). Se o cliente tiver algum problema para entrar, defina uma nova senha e passe para ele. Peça para trocá-la depois.</p>
+        <div class="u-row">
+          <input type="password" class="u-inp" id="u-nova-senha" placeholder="Nova senha (mín. 6 caracteres)" autocomplete="new-password" maxlength="72">
+          <button type="button" class="btn-secondary u-btn-sm" onclick="gerarSenha()">Gerar senha</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:.4rem;font-size:.8rem;color:var(--muted);margin:.6rem 0;text-transform:none;letter-spacing:0;font-weight:500">
+          <input type="checkbox" id="u-ver-senha" onchange="document.getElementById('u-nova-senha').type = this.checked ? 'text' : 'password'"> Mostrar senha
+        </label>
+        <button type="button" class="btn-primary" id="u-btn-senha" onclick="redefinirSenha()">Redefinir senha</button>
+        <div id="u-novasenha-box" class="u-novasenha" style="display:none"></div>
+      </div>
+      <p class="u-hint u-sec" id="u-senha-nota" style="display:none">Senhas de administradores não são redefinidas por aqui.</p>
+
+      <div class="u-sec">
+        <h3>Últimas alterações</h3>
+        <div id="u-log"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -1088,6 +1016,7 @@ if ($stats_vendas['total_vendas'] > 0) {
     
     document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
     if (btn) btn.classList.add('active');
+    if (page === 'clientes' && !uCarregado) carregarUsuarios(1);
   }
 
   // FILTROS MODAL
@@ -1105,12 +1034,12 @@ if ($stats_vendas['total_vendas'] > 0) {
     const statusVenda = document.getElementById('status-venda').value;
 
     if (!dataInicio || !dataFim) {
-      alert('⚠️ Selecione as datas!');
+      alert('Selecione as datas!');
       return;
     }
 
     if (dataInicio > dataFim) {
-      alert('⚠️ Data início não pode ser maior que data fim!');
+      alert('Data início não pode ser maior que data fim!');
       return;
     }
 
@@ -1128,7 +1057,7 @@ if ($stats_vendas['total_vendas'] > 0) {
     .then(r => r.json())
     .then(data => {
       if (data.erro) {
-        alert('❌ ' + data.erro);
+        alert(' ' + data.erro);
         return;
       }
       
@@ -1141,9 +1070,9 @@ if ($stats_vendas['total_vendas'] > 0) {
       mostrarFiltrosAtivos();
       
       fecharFiltros();
-      alert('✅ Filtros aplicados com sucesso!');
+      alert('Filtros aplicados com sucesso!');
     })
-    .catch(e => alert('❌ Erro ao aplicar filtros'));
+    .catch(e => alert('Erro ao aplicar filtros'));
   }
 
   function limparFiltros() {
@@ -1168,16 +1097,16 @@ if ($stats_vendas['total_vendas'] > 0) {
     if (filtroDataInicio && filtroDataFim) {
       const dataInicio = new Date(filtroDataInicio).toLocaleDateString('pt-BR');
       const dataFim = new Date(filtroDataFim).toLocaleDateString('pt-BR');
-      tags.push(`📅 Data: ${dataInicio} a ${dataFim}`);
+      tags.push(` Data: ${dataInicio} a ${dataFim}`);
     }
     
     if (filtroStatus) {
       const statusLabels = {
         'pendente': '⏳ Pendente',
-        'confirmada': '📦 Confirmada',
-        'enviada': '🚚 Enviada',
-        'entregue': '✅ Entregue',
-        'cancelada': '❌ Cancelada'
+        'confirmada': 'Confirmada',
+        'enviada': 'Enviada',
+        'entregue': 'Entregue',
+        'cancelada': 'Cancelada'
       };
       tags.push(`Status: ${statusLabels[filtroStatus] || filtroStatus}`);
     }
@@ -1191,29 +1120,241 @@ if ($stats_vendas['total_vendas'] > 0) {
     if (e.target.id === 'modal-filtros') fecharFiltros();
   });
 
-  // Função de desconto de produtos
-  function atualizarDesconto() {
-    const preco = parseFloat(document.querySelector('input[name="preco"]').value) || 0;
-    const promo = parseFloat(document.querySelector('input[name="preco_promo"]').value) || null;
-    const infoDiv = document.getElementById('priceInfo');
-
-    if (!promo) {
-      infoDiv.innerHTML = '<strong>Sem promoção</strong>';
-      return;
-    }
-
-    if (promo >= preco) {
-      infoDiv.innerHTML = '<strong style="color: #dc2626">⚠️ Erro:</strong> Preço promo deve ser menor';
-      return;
-    }
-
-    const desconto = ((preco - promo) / preco * 100).toFixed(1);
-    const economia = (preco - promo).toFixed(2);
-
-    infoDiv.innerHTML = `<strong>Original:</strong> R$ ${preco.toFixed(2).replace('.', ',')}<br><strong style="color: var(--gold)">Promo:</strong> R$ ${promo.toFixed(2).replace('.', ',')}<br><strong style="color: #16a34a">Desconto: ${desconto}%</strong>`;
+  // Desativar produto direto na listagem
+  function desativarProduto(id, btn) {
+    if (!confirm('Desativar este produto? Ele deixa de aparecer no catálogo (mas continua no histórico de vendas).')) return;
+    const fd = new FormData();
+    fd.append('acao', 'desativar');
+    fd.append('id', id);
+    fetch('api_produtos.php', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => {
+        if (d.sucesso) {
+          const row = document.getElementById('prod-row-' + id);
+          if (row) row.remove();
+        } else {
+          alert(' ' + (d.erro || 'Não foi possível desativar o produto.'));
+        }
+      })
+      .catch(() => alert('Erro de conexão ao desativar produto.'));
   }
 
-  window.addEventListener('DOMContentLoaded', atualizarDesconto);
+  // Excluir produto PERMANENTEMENTE (apaga do banco, não dá pra desfazer)
+  function excluirProduto(id, btn) {
+    if (!confirm('Excluir este produto PERMANENTEMENTE?\n\nIsso apaga o produto do banco de dados de vez — diferente de "Desativar", não tem como desfazer.')) return;
+    if (!confirm('Tem certeza mesmo? Essa é a confirmação final.')) return;
+    const fd = new FormData();
+    fd.append('acao', 'excluir_produto');
+    fd.append('id', id);
+    fetch('api_produtos.php', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => {
+        if (d.sucesso) {
+          const row = document.getElementById('prod-row-' + id);
+          if (row) row.remove();
+        } else {
+          alert(' ' + (d.erro || 'Não foi possível excluir o produto.'));
+        }
+      })
+      .catch(() => alert('Erro de conexão ao excluir produto.'));
+  }
+
+  // ───────── CLIENTES / USUÁRIOS ─────────
+  const CSRF_USUARIOS = <?= json_encode($csrf_usuarios) ?>;
+  let uCarregado = false, uPagina = 1, uTimer = null, uAtual = null;
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function apiUsuarios(acao, dados = {}, post = false) {
+    let url = 'api_usuarios.php', opts = {};
+    if (post) {
+      const fd = new FormData();
+      fd.append('acao', acao);
+      fd.append('csrf', CSRF_USUARIOS);
+      Object.entries(dados).forEach(([k, v]) => fd.append(k, v));
+      opts = { method: 'POST', body: fd };
+    } else {
+      url += '?' + new URLSearchParams({ acao, ...dados });
+    }
+    return fetch(url, opts).then(r => r.json())
+      .catch(() => ({ sucesso: false, erro: 'Erro de conexão. Tente novamente.' }));
+  }
+
+  function buscarUsuarios() {
+    clearTimeout(uTimer);
+    uTimer = setTimeout(() => carregarUsuarios(1), 300);
+  }
+
+  function carregarUsuarios(p) {
+    uCarregado = true;
+    const tbody = document.getElementById('u-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted)">Carregando…</td></tr>';
+    apiUsuarios('listar', {
+      q: document.getElementById('u-busca').value.trim(),
+      nivel: document.getElementById('u-filtro').value,
+      p: p || 1
+    }).then(d => {
+      if (!d.sucesso) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--red)">' + esc(d.erro || 'Erro ao carregar.') + '</td></tr>';
+        return;
+      }
+      uPagina = d.pagina;
+      document.getElementById('u-total').textContent = d.total + (d.total === 1 ? ' usuário' : ' usuários');
+      document.getElementById('u-vazio').style.display = d.usuarios.length ? 'none' : 'block';
+      tbody.innerHTML = d.usuarios.map(u => `
+        <tr>
+          <td><strong>${esc(u.nome)}</strong></td>
+          <td>${esc(u.email)}</td>
+          <td>${esc(u.telefone || '-')}</td>
+          <td><span class="badge ${u.nivel === 'admin' ? 'badge-purple' : 'badge-blue'}">${u.nivel === 'admin' ? 'Admin' : 'Cliente'}</span></td>
+          <td>${esc(u.criado_em)}</td>
+          <td><button class="btn-secondary u-btn-sm" onclick="abrirUsuario(${Number(u.id)})">Editar</button></td>
+        </tr>`).join('');
+      const pager = document.getElementById('u-pager');
+      pager.innerHTML = d.paginas > 1
+        ? (d.pagina > 1 ? '<button class="btn-secondary u-btn-sm" onclick="carregarUsuarios(' + (d.pagina - 1) + ')">← Anterior</button>' : '')
+          + '<span>Página ' + d.pagina + ' de ' + d.paginas + '</span>'
+          + (d.pagina < d.paginas ? '<button class="btn-secondary u-btn-sm" onclick="carregarUsuarios(' + (d.pagina + 1) + ')">Próxima →</button>' : '')
+        : '';
+    });
+  }
+
+  function uMsg(tipo, texto) {
+    const el = document.getElementById('u-msg');
+    if (!texto) { el.style.display = 'none'; return; }
+    el.className = 'u-msg ' + (tipo === 'ok' ? 'ok' : 'er');
+    el.textContent = texto;
+    el.style.display = 'block';
+  }
+
+  function preencherUsuario(u, log) {
+    uAtual = u;
+    document.getElementById('u-titulo').textContent = 'Editar: ' + u.nome;
+    document.getElementById('u-id').textContent = '#' + u.id;
+    document.getElementById('u-criado').textContent = u.criado_em;
+    document.getElementById('u-nome').value = u.nome;
+    document.getElementById('u-email').value = u.email;
+    document.getElementById('u-tel').value = u.telefone || '';
+    const sel = document.getElementById('u-nivel');
+    sel.value = u.nivel;
+    sel.disabled = u.eh_proprio;
+    document.getElementById('u-nivel-hint').textContent = u.eh_proprio
+      ? 'Você não pode alterar o seu próprio nível de acesso.'
+      : 'Mudar o nível pede confirmação. Administradores têm acesso total ao painel.';
+    const podeSenha = u.nivel === 'usuario' && !u.eh_proprio;
+    document.getElementById('u-senha-sec').style.display = podeSenha ? 'block' : 'none';
+    document.getElementById('u-senha-nota').style.display = podeSenha ? 'none' : 'block';
+    document.getElementById('u-senha-nota').textContent = u.eh_proprio
+      ? 'Para trocar a sua própria senha, use a opção de alterar senha da sua conta.'
+      : 'Senhas de administradores não são redefinidas por aqui.';
+    renderLog(log || []);
+  }
+
+  function renderLog(log) {
+    document.getElementById('u-log').innerHTML = log.length
+      ? log.map(l => `<div class="u-log-item"><strong>${esc(l.campo)}</strong>: <em>${esc(l.antigo || '(vazio)')}</em> → ${esc(l.novo || '(vazio)')}<br><em>por ${esc(l.admin)} em ${esc(l.quando)}</em></div>`).join('')
+      : '<p class="u-hint">Nenhuma alteração registrada para este usuário.</p>';
+  }
+
+  function abrirUsuario(id) {
+    uMsg('', '');
+    document.getElementById('u-nova-senha').value = '';
+    document.getElementById('u-nova-senha').type = 'password';
+    document.getElementById('u-ver-senha').checked = false;
+    document.getElementById('u-novasenha-box').style.display = 'none';
+    document.getElementById('u-corpo').style.display = 'none';
+    document.getElementById('modal-usuario').classList.add('active');
+    apiUsuarios('obter', { id }).then(d => {
+      if (!d.sucesso) { uMsg('er', d.erro || 'Não foi possível carregar o usuário.'); return; }
+      preencherUsuario(d.usuario, d.log);
+      document.getElementById('u-corpo').style.display = 'block';
+    });
+  }
+
+  function fecharUsuario() {
+    document.getElementById('modal-usuario').classList.remove('active');
+    document.getElementById('u-nova-senha').value = '';
+    document.getElementById('u-novasenha-box').style.display = 'none';
+  }
+
+  function salvarUsuario(e) {
+    e.preventDefault();
+    if (!uAtual) return;
+    const sel = document.getElementById('u-nivel');
+    const mudouNivel = !sel.disabled && sel.value !== uAtual.nivel;
+    if (mudouNivel) {
+      const txt = sel.value === 'admin'
+        ? 'Tornar este usuário ADMINISTRADOR? Ele terá acesso total ao painel.'
+        : 'Remover o acesso de administrador deste usuário?';
+      if (!confirm(txt)) return;
+    }
+    const btn = document.getElementById('u-btn-salvar');
+    btn.disabled = true;
+    apiUsuarios('salvar', {
+      id: uAtual.id,
+      nome: document.getElementById('u-nome').value,
+      email: document.getElementById('u-email').value,
+      telefone: document.getElementById('u-tel').value,
+      nivel: sel.value,
+      confirmar_nivel: mudouNivel ? '1' : '0'
+    }, true).then(d => {
+      btn.disabled = false;
+      if (!d.sucesso) { uMsg('er', d.erro || 'Não foi possível salvar.'); return; }
+      uMsg('ok', d.mensagem);
+      preencherUsuario(d.usuario, d.log);
+      carregarUsuarios(uPagina);
+    });
+  }
+
+  function gerarSenha() {
+    const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    const bytes = new Uint32Array(10);
+    crypto.getRandomValues(bytes);
+    const senha = Array.from(bytes, b => alfabeto[b % alfabeto.length]).join('');
+    const inp = document.getElementById('u-nova-senha');
+    inp.value = senha;
+    inp.type = 'text';
+    document.getElementById('u-ver-senha').checked = true;
+  }
+
+  function redefinirSenha() {
+    if (!uAtual) return;
+    const inp = document.getElementById('u-nova-senha');
+    const nova = inp.value;
+    if (nova.length < 6) { uMsg('er', 'A senha deve ter no mínimo 6 caracteres.'); return; }
+    if (!confirm('Redefinir a senha de ' + uAtual.nome + '?\n\nA senha antiga deixa de funcionar imediatamente.')) return;
+    const btn = document.getElementById('u-btn-senha');
+    btn.disabled = true;
+    apiUsuarios('redefinir_senha', { id: uAtual.id, nova_senha: nova, confirmar: '1' }, true).then(d => {
+      btn.disabled = false;
+      if (!d.sucesso) { uMsg('er', d.erro || 'Não foi possível redefinir a senha.'); return; }
+      uMsg('ok', d.mensagem);
+      renderLog(d.log || []);
+      const box = document.getElementById('u-novasenha-box');
+      box.innerHTML = 'Nova senha (aparece só agora, anote para passar ao cliente):<br><code></code> <button type="button" class="btn-secondary u-btn-sm" onclick="copiarSenha()">Copiar</button>';
+      box.querySelector('code').textContent = nova;
+      box.style.display = 'block';
+      inp.value = '';
+      inp.type = 'password';
+      document.getElementById('u-ver-senha').checked = false;
+    });
+  }
+
+  function copiarSenha() {
+    const t = document.querySelector('#u-novasenha-box code').textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => uMsg('ok', 'Senha copiada.'));
+  }
+
+  document.getElementById('modal-usuario').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-usuario') fecharUsuario();
+  });
+
+  // Abrir direto na aba Clientes (ex.: link antigo usuarios_admin.php)
+  if (location.hash === '#clientes') {
+    showPage('clientes', document.querySelector("[onclick*=\"showPage('clientes'\"]"));
+  }
 </script>
 
 </body>

@@ -8,8 +8,8 @@
       --purple:  #7c5cbf; --purple-lt: #f0ecfa;
       --orange:  #e07c2a; --orange-lt: #fdf3e8;
       --sw: 220px;
-      --fh: 'Cormorant Garamond', Georgia, serif;
-      --fb: 'DM Sans', sans-serif;
+      --fh: 'Manrope', system-ui, sans-serif;
+      --fb: 'Manrope', system-ui, sans-serif;
       --ease: cubic-bezier(.22,.61,.36,1);
       --r: .95rem; --sh: 0 2px 14px rgba(10,84,137,.07);
     }
@@ -100,6 +100,11 @@
     .lg-note a{ color:var(--blue); font-weight:600; }
 
     @media(max-width:820px){ .lg-left{display:none;} .lg-right{width:100%;} }
+    @media(max-width:480px){
+      .lg-right{ padding:2.8rem 1.4rem; }
+      .lg-right h2{ font-size:1.55rem; }
+      .lg-brand-t{ font-size:1.1rem; }
+    }
 
     /* ═══════════════════════════
        SHELL

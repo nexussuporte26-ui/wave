@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once 'conexão.php';
+require_once 'conexao.php';
 
 // Somente admin
 if (!isset($_SESSION['usuario_id']) || ($_SESSION['nivel'] ?? '') !== 'admin') {
@@ -10,6 +10,13 @@ if (!isset($_SESSION['usuario_id']) || ($_SESSION['nivel'] ?? '') !== 'admin') {
 $nome_s   = htmlspecialchars($_SESSION['nome'] ?? '');
 $iniciais = '';
 if ($nome_s) { $pts = explode(' ',$nome_s); $iniciais = strtoupper(substr($pts[0],0,1).(isset($pts[1])?substr($pts[1],0,1):'')); }
+
+define('IMG_PLACEHOLDER', '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.35"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>');
+
+// Categorias cadastradas (editáveis em categorias_admin.php)
+$categorias_db = [];
+$rcat = $conn->query("SELECT nome FROM categorias ORDER BY ordem, nome");
+if ($rcat) while ($row = $rcat->fetch_assoc()) $categorias_db[] = $row['nome'];
 
 // Modo edição?
 $edit_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
@@ -33,7 +40,6 @@ $conn->query("CREATE TABLE IF NOT EXISTS avaliacoes (
 
 // ── Garantir coluna imagem em produtos ──
 $conn->query("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS imagem VARCHAR(255) DEFAULT NULL");
-$conn->query("ALTER TABLE produtos ADD COLUMN IF NOT EXISTS destaque TINYINT(1) DEFAULT 0");
 
 // ── PROCESSAR FORM ──
 $msg = '';
@@ -45,7 +51,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $preco    = floatval($_POST['preco'] ?? 0);
     $estoque  = max(0, (int)($_POST['estoque'] ?? 0));
     $ativo    = isset($_POST['ativo']) ? 1 : 0;
-    $destaque = isset($_POST['destaque']) ? 1 : 0;
 
     if (!$nome || !$categoria || $preco <= 0) {
         $msg = 'erro|Preencha todos os campos obrigatórios.';
@@ -73,10 +78,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$msg) {
             $img_sql = $imagem_nome ? "'".$conn->real_escape_string($imagem_nome)."'" : "NULL";
             if ($acao === 'editar' && $edit_id) {
-                $conn->query("UPDATE produtos SET nome='$nome', categoria='$categoria', descricao='$descricao', preco=$preco, estoque=$estoque, ativo=$ativo, destaque=$destaque, imagem=$img_sql WHERE id=$edit_id");
+                $conn->query("UPDATE produtos SET nome='$nome', categoria='$categoria', descricao='$descricao', preco=$preco, estoque=$estoque, ativo=$ativo, imagem=$img_sql WHERE id=$edit_id");
                 $msg = 'ok|Produto atualizado com sucesso! <a href="produto.php?id='.$edit_id.'" style="color:inherit;font-weight:700">Ver página →</a>';
             } else {
-                $conn->query("INSERT INTO produtos (nome, categoria, descricao, preco, estoque, ativo, destaque, imagem) VALUES ('$nome','$categoria','$descricao',$preco,$estoque,$ativo,$destaque,$img_sql)");
+                $conn->query("INSERT INTO produtos (nome, categoria, descricao, preco, estoque, ativo, imagem) VALUES ('$nome','$categoria','$descricao',$preco,$estoque,$ativo,$img_sql)");
                 $new_id = $conn->insert_id;
                 $msg = 'ok|Produto cadastrado! <a href="produto.php?id='.$new_id.'" style="color:inherit;font-weight:700">Ver página →</a>';
                 // Reset para novo produto
@@ -96,16 +101,17 @@ $pe = $produto_edit; // shortcut
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title><?= $pe ? 'Editar Produto' : 'Novo Produto' ?> — Wave Admin</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600;1,700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&display=swap" rel="stylesheet"/>
   <style>
-    :root{--blue:#0A5489;--blue-dk:#073d66;--blue-lt:#1a7abf;--cream:#FFF3E7;--sand:#F5DEC8;--gold:#C8963E;--white:#FEFCF9;--text:#1a2e3b;--muted:#7a8d99;--font-display:'Cormorant Garamond',Georgia,serif;--font-body:'DM Sans',sans-serif;--ease:cubic-bezier(.22,.61,.36,1);}
+    :root{--blue:#0A5489;--blue-dk:#073d66;--blue-lt:#1a7abf;--cream:#FFF3E7;--sand:#F5DEC8;--gold:#C8963E;--white:#FEFCF9;--text:#1a2e3b;--muted:#7a8d99;--font-display:'Manrope',system-ui,sans-serif;--font-body:'Manrope',system-ui,sans-serif;--ease:cubic-bezier(.22,.61,.36,1);}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{font-family:var(--font-body);background:var(--cream);color:var(--text);min-height:100vh}
     a{text-decoration:none;color:inherit}
 
     /* ── TOP BAR ── */
-    .topbar{background:var(--blue-dk);color:rgba(255,243,231,.8);padding:.65rem 5%;display:flex;align-items:center;justify-content:space-between;gap:1rem;font-size:.78rem}
-    .topbar-left{display:flex;align-items:center;gap:1.2rem}
+    .topbar{background:var(--blue-dk);color:rgba(255,243,231,.8);padding:.65rem 5%;display:flex;align-items:center;justify-content:space-between;gap:.7rem;font-size:.78rem;flex-wrap:wrap}
+    .topbar-left{display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap;min-width:0}
+    .topbar-left a,.topbar-left span{white-space:nowrap}
     .topbar a{color:rgba(255,243,231,.65);transition:color .2s}
     .topbar a:hover{color:var(--gold)}
     .topbar-badge{background:#7c3aed;color:#fff;padding:.2rem .6rem;border-radius:999px;font-size:.65rem;font-weight:700}
@@ -196,6 +202,13 @@ $pe = $produto_edit; // shortcut
     /* ── RESPONSIVE ── */
     @media(max-width:960px){.form-layout{grid-template-columns:1fr}}
     @media(max-width:600px){.g2{grid-template-columns:1fr}}
+    @media(max-width:480px){
+      .topbar{font-size:.7rem;padding:.6rem 4%}
+      .page-header{padding:1.8rem 4%}
+      .page-header h1{font-size:1.5rem}
+      .form-layout{padding:1.4rem 4%;gap:1.2rem}
+      .card-body{padding:1.1rem}
+    }
   </style>
 </head>
 <body>
@@ -203,15 +216,15 @@ $pe = $produto_edit; // shortcut
 <!-- TOP BAR -->
 <div class="topbar">
   <div class="topbar-left">
-    <a href="index.php">🌊 Wave</a>
+    <a href="index.php">Wave</a>
     <span style="opacity:.3">/</span>
     <a href="Dashboard.php">Dashboard</a>
     <span style="opacity:.3">/</span>
     <span style="color:rgba(255,243,231,.9)"><?= $pe ? 'Editar Produto' : 'Novo Produto' ?></span>
   </div>
   <div class="topbar-right">
-    <span class="topbar-badge">⚙️ Admin</span>
-    <div class="topbar-av"><?= $iniciais ?: '👤' ?></div>
+    <span class="topbar-badge">Admin</span>
+    <div class="topbar-av"><?= $iniciais ?: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>' ?></div>
     <a href="index.php?sair=1" style="opacity:.7">Sair</a>
   </div>
 </div>
@@ -219,12 +232,12 @@ $pe = $produto_edit; // shortcut
 <!-- HEADER -->
 <div class="page-header">
   <div>
-    <h1><?= $pe ? '✏️ Editar Produto' : '✨ Novo Produto' ?></h1>
+    <h1><?= $pe ? 'Editar Produto' : 'Novo Produto' ?></h1>
     <p><?= $pe ? 'Editando: '.htmlspecialchars($pe['nome']) : 'Adicione um novo produto ao catálogo Wave' ?></p>
   </div>
   <div class="header-actions">
     <?php if($pe): ?>
-      <a href="produto.php?id=<?= $edit_id ?>" class="hbtn">👁 Ver página</a>
+      <a href="produto.php?id=<?= $edit_id ?>" class="hbtn">Ver página</a>
       <a href="catalogo.php" class="hbtn">← Catálogo</a>
     <?php else: ?>
       <a href="catalogo.php" class="hbtn">← Voltar ao catálogo</a>
@@ -240,12 +253,12 @@ $pe = $produto_edit; // shortcut
     <!-- COLUNA ESQUERDA -->
     <div>
       <?php if($mt): ?>
-        <div class="malert <?= $mt==='ok'?'ok':'er' ?>"><?= $mt==='ok'?'✅':'❌' ?> <?= $mv ?></div>
+        <div class="malert <?= $mt==='ok'?'ok':'er' ?>"><?= $mv ?></div>
       <?php endif; ?>
 
       <!-- Informações básicas -->
       <div class="card">
-        <div class="card-head"><span class="ch-icon">📋</span><h3>Informações do Produto</h3></div>
+        <div class="card-head"><h3>Informações do Produto</h3></div>
         <div class="card-body">
           <div class="fg">
             <label>Nome do produto<span class="req">*</span></label>
@@ -256,11 +269,12 @@ $pe = $produto_edit; // shortcut
             <div class="fw">
               <select name="categoria" id="pCat" required onchange="updatePreview()">
                 <option value="">Selecione uma categoria…</option>
-                <?php foreach(['Colares','Pulseiras','Brincos','Anéis','Kits'] as $c): ?>
-                  <option value="<?= $c ?>" <?= ($pe['categoria']??'')===$c?'selected':'' ?>><?= $c ?></option>
+                <?php foreach($categorias_db as $c): ?>
+                  <option value="<?= htmlspecialchars($c) ?>" <?= ($pe['categoria']??'')===$c?'selected':'' ?>><?= htmlspecialchars($c) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
+            <div class="hint"><a href="categorias_admin.php" style="color:var(--blue);font-weight:600">Gerenciar categorias →</a></div>
           </div>
           <div class="fg">
             <label>Descrição</label>
@@ -271,7 +285,7 @@ $pe = $produto_edit; // shortcut
 
       <!-- Preço e Estoque -->
       <div class="card">
-        <div class="card-head"><span class="ch-icon">💰</span><h3>Preço & Estoque</h3></div>
+        <div class="card-head"><h3>Preço & Estoque</h3></div>
         <div class="card-body">
           <div class="g2">
             <div class="fg">
@@ -283,13 +297,13 @@ $pe = $produto_edit; // shortcut
               <div class="fw"><input type="number" name="estoque" placeholder="0" min="0" required value="<?= htmlspecialchars($pe['estoque'] ?? '0') ?>"/></div>
             </div>
           </div>
-          <div class="hint">💡 Produtos com estoque 0 aparecerão como "Esgotado" na loja.</div>
+          <div class="hint">Produtos com estoque 0 aparecerão como "Esgotado" na loja.</div>
         </div>
       </div>
 
       <!-- Upload de imagem -->
       <div class="card">
-        <div class="card-head"><span class="ch-icon">🖼️</span><h3>Imagem do Produto</h3></div>
+        <div class="card-head"><h3>Imagem do Produto</h3></div>
         <div class="card-body">
           <?php if(!empty($pe['imagem'])): ?>
             <div class="img-current"><img src="uploads/produtos/<?= htmlspecialchars($pe['imagem']) ?>" alt="Imagem atual"/></div>
@@ -302,7 +316,7 @@ $pe = $produto_edit; // shortcut
           </div>
           <div id="uploadZone" class="img-upload-zone" ondrop="handleDrop(event)" ondragover="e=>e.preventDefault()" ondragenter="this.classList.add('drag')" ondragleave="this.classList.remove('drag')">
             <input type="file" name="imagem" id="imgFile" accept="image/jpeg,image/png,image/webp,image/gif" onchange="previewFile(this)"/>
-            <div class="img-upload-icon">📸</div>
+            <div class="img-upload-icon"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg></div>
             <div class="img-upload-text">
               <strong>Clique ou arraste uma imagem aqui</strong>
               JPG, PNG, WEBP ou GIF · Máximo 5 MB
@@ -317,11 +331,11 @@ $pe = $produto_edit; // shortcut
     <div>
       <!-- Prévia do card -->
       <div class="card" style="margin-bottom:1.5rem">
-        <div class="card-head"><span class="ch-icon">👁</span><h3>Pré-visualização</h3></div>
+        <div class="card-head"><h3>Pré-visualização</h3></div>
         <div class="card-body" style="padding-bottom:1.5rem">
           <div class="preview-card">
             <div class="pc-img" id="pcImg">
-              <span id="pcIcon"><?= !empty($pe['categoria'])?(['Colares'=>'🐚','Pulseiras'=>'🌊','Brincos'=>'🌺','Anéis'=>'💍','Kits'=>'🎁'][$pe['categoria']]??'💎'):'💎' ?></span>
+              <span id="pcIcon"><?= IMG_PLACEHOLDER ?></span>
               <?php if(!empty($pe['imagem'])): ?>
                 <img src="uploads/produtos/<?= htmlspecialchars($pe['imagem']) ?>" id="pcImgTag" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"/>
               <?php else: ?>
@@ -339,15 +353,11 @@ $pe = $produto_edit; // shortcut
 
       <!-- Configurações -->
       <div class="card">
-        <div class="card-head"><span class="ch-icon">⚙️</span><h3>Configurações</h3></div>
+        <div class="card-head"><h3>Configurações</h3></div>
         <div class="card-body">
           <div class="toggle-row">
             <div><div class="toggle-label">Produto ativo</div><div class="toggle-sub">Visível no catálogo para clientes</div></div>
             <label class="toggle"><input type="checkbox" name="ativo" <?= ($pe['ativo']??1)?'checked':'' ?>><div class="toggle-track"></div></label>
-          </div>
-          <div class="toggle-row">
-            <div><div class="toggle-label">⭐ Destacar produto</div><div class="toggle-sub">Aparece na seção de destaques</div></div>
-            <label class="toggle"><input type="checkbox" name="destaque" <?= !empty($pe['destaque'])?'checked':'' ?>><div class="toggle-track"></div></label>
           </div>
         </div>
       </div>
@@ -356,10 +366,11 @@ $pe = $produto_edit; // shortcut
       <div class="card">
         <div class="card-body">
           <button type="submit" class="save-btn">
-            <?= $pe ? '💾 Salvar alterações' : '✨ Publicar produto' ?>
+            <?= $pe ? 'Salvar alterações' : 'Publicar produto' ?>
           </button>
           <?php if($pe): ?>
-            <button type="button" class="del-btn" onclick="confirmarDelete(<?= $edit_id ?>)">🗑 Desativar produto</button>
+            <button type="button" class="del-btn" onclick="confirmarDelete(<?= $edit_id ?>)">Desativar produto</button>
+            <button type="button" class="del-btn" style="border-color:#991b1b;color:#991b1b;margin-top:.5rem" onclick="confirmarExclusao(<?= $edit_id ?>)">Excluir permanentemente</button>
           <?php endif; ?>
         </div>
       </div>
@@ -368,7 +379,7 @@ $pe = $produto_edit; // shortcut
 </form>
 
 <script>
-  const catIcons={Colares:'🐚',Pulseiras:'🌊',Brincos:'🌺','Anéis':'💍',Kits:'🎁'};
+  const IMG_PLACEHOLDER='<?= IMG_PLACEHOLDER ?>';
 
   function updatePreview(){
     const nome=document.getElementById('pNome')?.value||'Nome do produto';
@@ -377,7 +388,7 @@ $pe = $produto_edit; // shortcut
 
     document.getElementById('pcName').textContent=nome;
     document.getElementById('pcCat').textContent=cat||'Categoria';
-    document.getElementById('pcIcon').textContent=catIcons[cat]||'💎';
+    // pcIcon já mostra o placeholder padrão; some quando uma imagem é escolhida (ver previewFile)
     document.getElementById('pcPrice').textContent='R$ '+(preco>0?preco.toFixed(2).replace('.',','):'0,00');
   }
 
@@ -422,10 +433,27 @@ $pe = $produto_edit; // shortcut
   }
 
   function confirmarDelete(id){
-    if(confirm('Desativar este produto? Ele não aparecerá mais no catálogo.')){
-      fetch('api_produtos.php',{method:'POST',body:Object.assign(new FormData(),{acao:'desativar',id})})
-        .then(r=>r.json()).then(d=>{if(d.sucesso)window.location='catalogo.php';});
+    if(confirm('Desativar este produto? Ele não aparecerá mais no catálogo (mas continua no histórico de vendas).')){
+      const fd = new FormData();
+      fd.append('acao', 'desativar');
+      fd.append('id', id);
+      fetch('api_produtos.php', { method:'POST', body: fd })
+        .then(r=>r.json())
+        .then(d=>{ if(d.sucesso) window.location='catalogo.php'; else alert(d.erro||'Erro ao desativar produto.'); })
+        .catch(()=>alert('Erro de conexão ao desativar produto.'));
     }
+  }
+
+  function confirmarExclusao(id){
+    if(!confirm('Excluir este produto PERMANENTEMENTE?\n\nIsso apaga o produto do banco de dados de vez — diferente de "Desativar", não tem como desfazer.')) return;
+    if(!confirm('Tem certeza mesmo? Essa é a confirmação final.')) return;
+    const fd = new FormData();
+    fd.append('acao', 'excluir_produto');
+    fd.append('id', id);
+    fetch('api_produtos.php', { method:'POST', body: fd })
+      .then(r=>r.json())
+      .then(d=>{ if(d.sucesso) window.location='Dashboard.php'; else alert(d.erro||'Erro ao excluir produto.'); })
+      .catch(()=>alert('Erro de conexão ao excluir produto.'));
   }
 </script>
 </body>

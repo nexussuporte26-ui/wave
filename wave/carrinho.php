@@ -1,12 +1,12 @@
 <?php
 session_start();
-require_once 'conexão.php';
+require_once 'conexao.php';
 
 if (isset($_GET['sair'])) { session_destroy(); header("Location: index.php"); exit(); }
 
-$logado   = isset($_SESSION['usuario_id']);
-$nivel    = $logado ? ($_SESSION['nivel'] ?? 'usuario') : '';
-$nome_s   = $logado ? htmlspecialchars($_SESSION['nome'] ?? '') : '';
+$logado = isset($_SESSION['usuario_id']);
+$nivel = $logado ? ($_SESSION['nivel'] ?? 'usuario') : '';
+$nome_s = $logado ? htmlspecialchars($_SESSION['nome'] ?? '') : '';
 $primeiro = $nome_s ? strtok($nome_s, ' ') : '';
 $iniciais = '';
 if ($logado && $nome_s) {
@@ -16,14 +16,14 @@ if ($logado && $nome_s) {
 $udb = null;
 if ($logado) {
     $uid = (int)$_SESSION['usuario_id'];
-    $r   = $conn->query("SELECT nome,email FROM usuarios WHERE id=$uid LIMIT 1");
+    $r = $conn->query("SELECT nome,email FROM usuarios WHERE id=$uid LIMIT 1");
     if ($r && $r->num_rows > 0) $udb = $r->fetch_assoc();
 }
 $eh_admin = $nivel === 'admin';
 
 // Todos os produtos para busca global
 $todos = [];
-$rall  = $conn->query("SELECT id,nome,preco,categoria,imagem FROM produtos WHERE ativo=1 ORDER BY id DESC");
+$rall = $conn->query("SELECT id,nome,preco,categoria,imagem FROM produtos WHERE ativo=1 ORDER BY id DESC");
 if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
 ?>
 <!DOCTYPE html>
@@ -32,14 +32,14 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <title>Sacola — Wave Acessórios</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600;1,700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300..800&display=swap" rel="stylesheet"/>
   <style>
     :root{
       --blue:#0A5489;--blue-dk:#073d66;--blue-lt:#1a7abf;
       --cream:#FFF3E7;--sand:#F5DEC8;--gold:#C8963E;
       --white:#FEFCF9;--text:#1a2e3b;--muted:#7a8d99;
-      --font-display:'Cormorant Garamond',Georgia,serif;
-      --font-body:'DM Sans',sans-serif;
+      --font-display:'Manrope',system-ui,sans-serif;
+      --font-body:'Manrope',system-ui,sans-serif;
       --ease:cubic-bezier(.22,.61,.36,1);
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -57,6 +57,11 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     .nav-links a:hover{color:var(--gold)}.nav-links a:hover::after{width:100%}
     .nav-icons{display:flex;gap:.8rem;align-items:center}
     .nav-sb{background:none;border:none;cursor:pointer;color:var(--blue);font-size:1.1rem;transition:color .25s;padding:.3rem}
+    .nav-ham{display:none;background:none;border:none;cursor:pointer;color:var(--blue);padding:.3rem;align-items:center;justify-content:center;flex-shrink:0}
+    .mobile-nav-panel{display:none;flex-direction:column;position:absolute;top:100%;left:0;right:0;background:var(--white);border-top:1px solid rgba(10,84,137,.1);box-shadow:0 16px 32px rgba(10,84,137,.14);padding:.4rem 5% 1rem;z-index:200}
+    .mobile-nav-panel.open{display:flex}
+    .mobile-nav-panel a{display:block;width:100%;text-align:left;padding:.85rem .2rem;font-size:.85rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--blue);border-bottom:1px solid rgba(10,84,137,.07)}
+    .mobile-nav-panel a:last-child{border-bottom:none}
     .nav-sb:hover{color:var(--gold)}
     .nav-cart{position:relative;background:var(--blue);color:var(--cream)!important;padding:.42rem 1rem;border-radius:2rem;font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;font-weight:500;transition:background .25s!important;display:inline-flex;align-items:center;gap:.4rem}
     .nav-cart:hover{background:var(--gold)!important}
@@ -89,7 +94,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     .pd-item.sair{color:#dc2626}.pd-item.sair:hover{background:#fef2f2}
 
     /* ── SEARCH OVERLAY ── */
-    .s-overlay{display:none;position:fixed;inset:0;background:rgba(7,61,102,.6);backdrop-filter:blur(8px);z-index:200;align-items:flex-start;justify-content:center;padding-top:5rem}
+    .s-overlay{display:none;position:fixed;inset:0;background:rgba(7,61,102,.6);backdrop-filter:blur(8px);z-index:200;align-items:flex-start;justify-content:center;padding:5rem 1rem 1rem}
     .s-overlay.ab{display:flex}
     .s-box{background:var(--white);border-radius:1.4rem;width:100%;max-width:600px;overflow:hidden;box-shadow:0 24px 80px rgba(7,61,102,.25);animation:sIn .28s var(--ease)}
     @keyframes sIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
@@ -212,7 +217,14 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     #toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--blue);color:#fff;padding:.6rem 1.1rem;border-radius:2rem;font-size:.78rem;font-weight:500;z-index:999;opacity:0;transform:translateY(10px);transition:all .28s;pointer-events:none;max-width:280px}
 
     @media(max-width:1000px){.cart-layout{grid-template-columns:1fr}.summary-card{position:static}}
-    @media(max-width:640px){.nav-links{display:none}.nav-nome{display:none}.ci-right{gap:.6rem}.ci-img{width:60px;height:60px}}
+    @media(max-width:640px){.nav-links{display:none}.nav-nome{display:none}.nav-ham{display:flex}.ci-right{gap:.6rem}.ci-img{width:60px;height:60px}}
+    @media(max-width:480px){
+      .cart-item{flex-wrap:wrap;gap:.8rem;padding:1rem}
+      .ci-img{width:52px;height:52px}
+      .ci-info{flex:1 1 auto}
+      .ci-right{flex:1 1 100%;justify-content:space-between;gap:.5rem}
+      .ci-total{min-width:auto}
+    }
   </style>
 </head>
 <body>
@@ -227,35 +239,52 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     <?php if($eh_admin):?><a href="Dashboard.php">Dashboard</a><?php endif;?>
   </div>
   <div class="nav-icons">
-    <button class="nav-sb" onclick="openSearch()">🔍</button>
+    <button class="nav-ham" id="navHam" onclick="toggleMobileNav()" aria-label="Abrir menu" aria-expanded="false" title="Menu"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+    <button class="nav-sb" onclick="openSearch()" title="Buscar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></button>
     <a class="nav-cart ativo" href="carrinho.php">
-      🛍 Sacola
+       Sacola
       <span class="cart-badge" id="cartBadge">0</span>
     </a>
     <?php if($logado):?>
     <div class="profile-wrap" id="pWrap">
       <div class="profile-trigger" id="pTrigger" onclick="toggleDrop()">
-        <div class="nav-av <?=$eh_admin?'adm':''?>"><?=$iniciais?:'👤'?></div>
+        <div class="nav-av <?=$eh_admin?'adm':''?>"><?=$iniciais?:''?></div>
         <span class="nav-nome"><?=$primeiro?></span>
         <span class="nav-arrow">▾</span>
       </div>
       <div class="pd" id="pDrop">
         <div class="pd-head">
-          <div class="pd-av <?=$eh_admin?'adm':''?>"><?=$iniciais?:'👤'?></div>
+          <div class="pd-av <?=$eh_admin?'adm':''?>"><?=$iniciais?:''?></div>
           <div><div class="pd-nome"><?=$nome_s?></div><div class="pd-email"><?=htmlspecialchars($udb['email']??'')?></div></div>
         </div>
         <div class="pd-menu">
           <?php if($eh_admin):?>
-          <a href="Dashboard.php" class="pd-item"><div class="pd-ic ip">🏠</div>Dashboard</a>
-          <a href="catalogo.php" class="pd-item"><div class="pd-ic ib">📦</div>Catálogo</a>
+          <a href="Dashboard.php" class="pd-item"><div class="pd-ic ip"></div>Dashboard</a>
+          <a href="catalogo.php" class="pd-item"><div class="pd-ic ib"></div>Catálogo</a>
+          <a href="cadastro_produto.php" class="pd-item"><div class="pd-ic ib"></div>Novo produto</a>
           <div class="pd-sep"></div>
           <?php endif;?>
-          <a href="index.php?sair=1" class="pd-item sair"><div class="pd-ic ir">🚪</div>Sair</a>
+          <a href="index.php?sair=1" class="pd-item sair"><div class="pd-ic ir"></div>Sair</a>
         </div>
       </div>
     </div>
     <?php else:?>
     <a href="login.php" class="nav-login-btn">Entrar</a>
+    <?php endif;?>
+  </div>
+
+  <div class="mobile-nav-panel" id="mobileNavPanel">
+    <a href="index.php">Início</a>
+    <a href="catalogo.php">Catálogo</a>
+    <a href="index.php#contato">Contato</a>
+    <?php if($eh_admin):?>
+      <a href="Dashboard.php">Dashboard</a>
+      <a href="cadastro_produto.php">Novo produto</a>
+    <?php endif;?>
+    <?php if($logado):?>
+      <a href="index.php?sair=1">Sair</a>
+    <?php else:?>
+      <a href="login.php">Entrar</a>
     <?php endif;?>
   </div>
 </nav>
@@ -264,7 +293,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
 <div class="s-overlay" id="sOverlay" onclick="if(event.target===this)closeSearch()">
   <div class="s-box">
     <div class="s-iw">
-      <span style="font-size:1rem;opacity:.4">🔍</span>
+      <span style="font-size:1rem;opacity:.4"></span>
       <input type="text" id="sInput" placeholder="Buscar acessórios…" oninput="doSearch(this.value)" autocomplete="off"/>
       <button class="s-close" onclick="closeSearch()">✕</button>
     </div>
@@ -275,7 +304,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
 
 <!-- PAGE HEADER -->
 <div class="page-header">
-  <div class="ph-deco">🛍</div>
+  <div class="ph-deco"></div>
   <div class="breadcrumb">
     <a href="index.php">Início</a><span class="sep">›</span>
     <span style="color:rgba(255,243,231,.85)">Sacola</span>
@@ -303,7 +332,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     <div class="cart-card">
       <div class="cart-card-head">
         <h3>Itens <span class="item-count" id="itemCount">0</span></h3>
-        <button class="clear-all" onclick="clearCart()">🗑 Limpar sacola</button>
+        <button class="clear-all" onclick="clearCart()"> Limpar sacola</button>
       </div>
       <div id="cartItems">
         <!-- preenchido por JS -->
@@ -359,10 +388,10 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
         </div>
 
         <button class="btn-checkout" id="btnCheckout" onclick="finalizarPedido()" disabled>
-          🔒 Finalizar pedido
+           Finalizar pedido
         </button>
 
-        <div class="security-note">🔒 Pagamento 100% seguro e criptografado</div>
+        <div class="security-note"> Pagamento 100% seguro e criptografado</div>
 
         <div class="payment-icons">
           <span class="pay-ic">Visa</span>
@@ -387,7 +416,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
 <div id="toast"></div>
 
 <script>
-  const catIcons = {Colares:'🐚',Pulseiras:'🌊',Brincos:'🌺','Anéis':'💍',Kits:'🎁'};
+  const IMG_PLACEHOLDER='<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" style="opacity:.35"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>';
   const FREE_SHIPPING = 99;
   const CUPONS = { 'WAVE10': 10, 'WAVE20': 20, 'PRAIA15': 15 }; // % de desconto
 
@@ -395,7 +424,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
   const produtosAll = <?= json_encode($todos) ?>;
 
   let cupomAtual = null;
-  let cupomDesc  = 0;
+  let cupomDesc = 0;
 
   // ── Cart helpers ──
   function getCart(){ try{ return JSON.parse(localStorage.getItem('wave_cart')||'[]'); }catch(e){ return []; } }
@@ -405,12 +434,12 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
 
   // ── Render cart ──
   function renderCart(){
-    const cart   = getCart();
-    const items  = document.getElementById('cartItems');
-    const count  = document.getElementById('itemCount');
-    const badge  = document.getElementById('cartBadge');
-    const btnCO  = document.getElementById('btnCheckout');
-    const total  = cart.reduce((s,i) => s+i.qty, 0);
+    const cart = getCart();
+    const items = document.getElementById('cartItems');
+    const count = document.getElementById('itemCount');
+    const badge = document.getElementById('cartBadge');
+    const btnCO = document.getElementById('btnCheckout');
+    const total = cart.reduce((s,i) => s+i.qty, 0);
 
     if (count) count.textContent = total;
     if (badge){ badge.textContent = total; badge.classList.toggle('show', total > 0); }
@@ -420,7 +449,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     if (cart.length === 0) {
       items.innerHTML = `
         <div class="cart-empty">
-          <div class="cart-empty-icon">🛍</div>
+          <div class="cart-empty-icon"></div>
           <h3>Sua sacola está vazia</h3>
           <p>Explore nosso catálogo e adicione peças que você vai amar.</p>
           <a href="catalogo.php" class="btn-go-catalog">Ver catálogo →</a>
@@ -433,9 +462,9 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     if(btnCO) btnCO.disabled = false;
 
     items.innerHTML = cart.map((item, idx) => {
-      const img   = item.imagem
+      const img = item.imagem
         ? `<img src="uploads/produtos/${item.imagem}" alt="${item.nome}"/>`
-        : (catIcons[item.categoria] || '💎');
+        : IMG_PLACEHOLDER;
       const total = (item.preco * item.qty).toFixed(2).replace('.', ',');
       return `
         <div class="cart-item" id="ci-${idx}">
@@ -463,16 +492,16 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
 
   function updateSummary(cart){
     const subtotal = cart.reduce((s,i) => s + i.preco * i.qty, 0);
-    const pix      = subtotal * 0.05;
-    const frete    = subtotal >= FREE_SHIPPING || subtotal === 0 ? 0 : 9.90;
-    const cupDesc  = cupomAtual ? subtotal * (cupomDesc / 100) : 0;
-    const total    = Math.max(0, subtotal - pix - cupDesc + frete);
+    const pix = subtotal * 0.05;
+    const frete = subtotal >= FREE_SHIPPING || subtotal === 0 ? 0 : 9.90;
+    const cupDesc = cupomAtual ? subtotal * (cupomDesc / 100) : 0;
+    const total = Math.max(0, subtotal - pix - cupDesc + frete);
 
     document.getElementById('sumSubtotal').textContent = fmt(subtotal);
-    document.getElementById('sumPix').textContent      = '– ' + fmt(pix);
-    document.getElementById('sumFrete').textContent    = frete === 0 ? (subtotal > 0 ? '🎉 Grátis' : 'Calculando…') : fmt(frete);
-    document.getElementById('sumFrete').className      = 'val' + (frete === 0 && subtotal > 0 ? ' green' : '');
-    document.getElementById('sumTotal').textContent    = fmt(total);
+    document.getElementById('sumPix').textContent = '– ' + fmt(pix);
+    document.getElementById('sumFrete').textContent = frete === 0 ? (subtotal > 0 ? 'Grátis' : 'Calculando…') : fmt(frete);
+    document.getElementById('sumFrete').className = 'val' + (frete === 0 && subtotal > 0 ? ' green' : '');
+    document.getElementById('sumTotal').textContent = fmt(total);
 
     // Cupom
     const cr = document.getElementById('cupomRow');
@@ -483,13 +512,13 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     // Shipping bar
     const pct = Math.min(100, (subtotal / FREE_SHIPPING) * 100);
     const fill = document.getElementById('sbFill');
-    const msg  = document.getElementById('sbMsg');
-    const val  = document.getElementById('sbVal');
+    const msg = document.getElementById('sbMsg');
+    const val = document.getElementById('sbVal');
     if(fill) fill.style.width = pct + '%';
-    if(val)  val.textContent = fmt(subtotal);
+    if(val) val.textContent = fmt(subtotal);
     if(msg){
       if(subtotal === 0) msg.textContent = 'Adicione produtos para ganhar frete grátis!';
-      else if(subtotal >= FREE_SHIPPING){ msg.textContent = '🎉 Você ganhou frete grátis!'; msg.className='sb-msg ok'; }
+      else if(subtotal >= FREE_SHIPPING){ msg.textContent = 'Você ganhou frete grátis!'; msg.className='sb-msg ok'; }
       else{ const falta = FREE_SHIPPING - subtotal; msg.textContent = 'Falta '+fmt(falta)+' para frete grátis!'; msg.className='sb-msg'; }
     }
   }
@@ -519,17 +548,17 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
 
   // ── Cupom ──
   function aplicarCupom(){
-    const code  = (document.getElementById('cupomInput')?.value || '').trim().toUpperCase();
-    const msg   = document.getElementById('cupomMsg');
+    const code = (document.getElementById('cupomInput')?.value || '').trim().toUpperCase();
+    const msg = document.getElementById('cupomMsg');
     if (!code){ if(msg){ msg.textContent='Digite um cupom.'; msg.className='coupon-msg er'; } return; }
     if (CUPONS[code] !== undefined){
       cupomAtual = code;
-      cupomDesc  = CUPONS[code];
-      if(msg){ msg.textContent='✅ Cupom aplicado: '+cupomDesc+'% de desconto!'; msg.className='coupon-msg ok'; }
+      cupomDesc = CUPONS[code];
+      if(msg){ msg.textContent='Cupom aplicado: '+cupomDesc+'% de desconto!'; msg.className='coupon-msg ok'; }
       renderCart();
     } else {
       cupomAtual = null; cupomDesc = 0;
-      if(msg){ msg.textContent='❌ Cupom inválido ou expirado.'; msg.className='coupon-msg er'; }
+      if(msg){ msg.textContent='Cupom inválido ou expirado.'; msg.className='coupon-msg er'; }
       renderCart();
     }
   }
@@ -544,7 +573,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     grid.innerHTML = sugs.map(p => {
       const img = p.imagem
         ? `<img src="uploads/produtos/${p.imagem}" alt="${p.nome}"/>`
-        : (catIcons[p.categoria] || '💎');
+        : IMG_PLACEHOLDER;
       return `
         <a class="sug-card" href="produto.php?id=${p.id}">
           <div class="sug-img">${img}</div>
@@ -573,13 +602,33 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
   // ── Finalizar ──
   function finalizarPedido(){
     <?php if(!$logado):?>
-    showToast('⚠ Faça login para finalizar o pedido!');
+    showToast('Faça login para finalizar o pedido!');
     setTimeout(()=>window.location.href='login.php?redirect=carrinho.php', 1800);
     <?php else:?>
-    showToast('🎉 Pedido enviado! Em breve entraremos em contato.');
+    showToast('Pedido enviado! Em breve entraremos em contato.');
     setTimeout(()=>{ saveCart([]); window.location.href='index.php'; }, 2200);
     <?php endif;?>
   }
+
+  // ── Menu mobile (hamburguer) ──
+  function toggleMobileNav(){
+    const panel=document.getElementById('mobileNavPanel');
+    const btn=document.getElementById('navHam');
+    if(!panel||!btn) return;
+    const open=panel.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open?'true':'false');
+  }
+  document.addEventListener('click', e=>{
+    const panel=document.getElementById('mobileNavPanel');
+    const btn=document.getElementById('navHam');
+    if(panel && btn && panel.classList.contains('open') && !panel.contains(e.target) && !btn.contains(e.target)){
+      panel.classList.remove('open'); btn.setAttribute('aria-expanded','false');
+    }
+  });
+  document.querySelectorAll('.mobile-nav-panel a').forEach(a=>a.addEventListener('click', ()=>{
+    document.getElementById('mobileNavPanel')?.classList.remove('open');
+    document.getElementById('navHam')?.setAttribute('aria-expanded','false');
+  }));
 
   // ── Search overlay ──
   function openSearch(){ document.getElementById('sOverlay').classList.add('ab'); setTimeout(()=>document.getElementById('sInput')?.focus(),80); }
@@ -594,7 +643,7 @@ if ($rall) while ($row = $rall->fetch_assoc()) $todos[] = $row;
     const f = produtosAll.filter(p=>p.nome.toLowerCase().includes(q.toLowerCase())||p.categoria.toLowerCase().includes(q.toLowerCase())).slice(0,7);
     if(!f.length){ r.innerHTML=`<div class="s-empty">Nenhum resultado para "<strong>${q}</strong>"</div>`; return; }
     r.innerHTML = f.map(p=>`<a class="s-item" href="produto.php?id=${p.id}">
-      <div class="s-img">${p.imagem?`<img src="uploads/produtos/${p.imagem}" alt=""/>`:catIcons[p.categoria]||'💎'}</div>
+      <div class="s-img">${p.imagem?`<img src="uploads/produtos/${p.imagem}" alt=""/>`:IMG_PLACEHOLDER}</div>
       <div class="s-info"><h5>${p.nome}</h5><span>${p.categoria}</span></div>
       <span class="s-price">R$ ${parseFloat(p.preco).toFixed(2).replace('.',',')}</span>
     </a>`).join('');
